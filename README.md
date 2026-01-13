@@ -130,7 +130,7 @@ offline_store:
   type: redshift
   region: us-west-2
   cluster_id: YOUR-CLUSTER-ID        # e.g., feast-insurance-cluster
-  database: insurance_features
+  database: feast_db
   user: YOUR-REDSHIFT-USER           # e.g., feast_user
   s3_staging_location: s3://YOUR-BUCKET/insurance-demo/staging
   iam_role: arn:aws:iam::YOUR-ACCOUNT:role/YOUR-REDSHIFT-ROLE
@@ -155,7 +155,7 @@ python setup_redshift_data.py --local-only --output-dir ../data/sample --num-cus
 
 # OPTION B: Redshift with environment variables
 export REDSHIFT_HOST=YOUR-CLUSTER.xxxxx.us-west-2.redshift.amazonaws.com
-export REDSHIFT_DATABASE=insurance_features
+export REDSHIFT_DATABASE=feast_db
 export REDSHIFT_USER=feast_user
 export REDSHIFT_PASSWORD=YOUR-PASSWORD
 
@@ -164,7 +164,7 @@ python setup_redshift_data.py --num-customers 10000
 # OPTION C: Redshift with command line arguments
 python setup_redshift_data.py \
     --host YOUR-CLUSTER.xxxxx.us-west-2.redshift.amazonaws.com \
-    --database insurance_features \
+    --database feast_db \
     --user feast_user \
     --password YOUR-PASSWORD \
     --num-customers 10000

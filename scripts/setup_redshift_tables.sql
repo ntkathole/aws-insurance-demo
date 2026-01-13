@@ -5,7 +5,7 @@
 --
 -- Usage:
 --   psql -h your-cluster.xxxxx.us-west-2.redshift.amazonaws.com \
---        -U feast_user -d insurance_features -f setup_redshift_tables.sql
+--        -U feast_user -d feast_db -f setup_redshift_tables.sql
 
 -- Create schema if not exists
 CREATE SCHEMA IF NOT EXISTS insurance;

@@ -14,7 +14,7 @@ Modes:
 Usage:
     # MODE 1: Load directly to Redshift (recommended for demo)
     export REDSHIFT_HOST=my-cluster.xxxxx.us-west-2.redshift.amazonaws.com
-    export REDSHIFT_DATABASE=insurance_features
+    export REDSHIFT_DATABASE=feast_db
     export REDSHIFT_USER=feast_user
     export REDSHIFT_PASSWORD=your_password
     python setup_redshift_data.py --num-customers 10000
