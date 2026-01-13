@@ -15,10 +15,16 @@ Use Cases:
 """
 
 from feast import FeatureService
-from feast.feature_logging import LoggingConfig
-from feast.infra.offline_stores.contrib.redshift_offline_store.redshift import (
-    RedshiftLoggingDestination,
-)
+
+# Try to import logging components - optional, may not be available in all Feast versions
+try:
+    from feast.feature_logging import LoggingConfig
+    from feast.infra.offline_stores.redshift_source import RedshiftLoggingDestination
+    LOGGING_AVAILABLE = True
+except ImportError:
+    LOGGING_AVAILABLE = False
+    LoggingConfig = None
+    RedshiftLoggingDestination = None
 
 # Import feature views
 from feature_views.underwriting_features import (
@@ -106,12 +112,10 @@ underwriting_v2 = FeatureService(
         underwriting_risk_score,
         premium_calculator,
     ],
-    # Enable feature logging for monitoring
-    logging_config=LoggingConfig(
-        destination=RedshiftLoggingDestination(
-            table_name="insurance.feature_logs_underwriting"
-        ),
-    ),
+    # Note: logging_config can be added when RedshiftLoggingDestination is available
+    # logging_config=LoggingConfig(
+    #     destination=RedshiftLoggingDestination(table_name="insurance.feature_logs_underwriting"),
+    # ),
     tags={
         "version": "2.0",
         "use_case": "pcm",
@@ -169,11 +173,10 @@ claims_assessment_v1 = FeatureService(
         # On-demand fraud indicators
         claims_fraud_indicators,
     ],
-    logging_config=LoggingConfig(
-        destination=RedshiftLoggingDestination(
-            table_name="insurance.feature_logs_claims"
-        ),
-    ),
+    # Note: logging_config can be added when RedshiftLoggingDestination is available
+    # logging_config=LoggingConfig(
+    #     destination=RedshiftLoggingDestination(table_name="insurance.feature_logs_claims"),
+    # ),
     tags={
         "version": "1.0",
         "use_case": "claims",
