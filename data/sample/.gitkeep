@@ -1,0 +1,2 @@
+# This directory contains sample parquet files for local testing.
+# Run scripts/generate_sample_data.py to create sample data.

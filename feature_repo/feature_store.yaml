@@ -1,0 +1,79 @@
+# Feast Feature Store Configuration for AWS Insurance Demo
+# 
+# This configuration uses:
+# - S3 for registry storage (scalable, shared access)
+# - Redshift for offline store (historical features, training data)
+# - DynamoDB for online store (real-time feature serving)
+
+project: insurance_demo
+
+# Registry Configuration - S3 for scalable, shared registry
+# Update the S3 path with your bucket name
+registry:
+  path: s3://your-feast-bucket/insurance-demo/registry.pb
+  cache_ttl_seconds: 60
+  # For higher concurrency, consider SQL registry:
+  # registry_type: sql
+  # path: postgresql://user:password@host:5432/feast_registry
+
+# Provider - AWS for optimal integration
+provider: aws
+
+# Offline Store - Redshift for historical feature retrieval
+# Supports both provisioned clusters and serverless
+offline_store:
+  type: redshift
+  region: us-west-2
+  
+  # For Provisioned Cluster:
+  cluster_id: feast-insurance-cluster
+  database: insurance_features
+  user: feast_user
+  
+  # For Serverless (uncomment and remove cluster_id/user):
+  # workgroup: feast-insurance-workgroup
+  # database: insurance_features
+  
+  # S3 staging location for data exchange
+  s3_staging_location: s3://your-feast-bucket/insurance-demo/staging
+  
+  # IAM role for Redshift to access S3
+  iam_role: arn:aws:iam::123456789012:role/RedshiftFeastRole
+
+# Online Store - DynamoDB for low-latency feature serving
+online_store:
+  type: dynamodb
+  region: us-west-2
+  
+  # Performance tuning options
+  batch_size: 40                    # Items per BatchGetItem (max 100)
+  consistent_reads: false           # Set true for strong consistency (higher latency)
+  
+  # Table naming
+  table_name_template: "{project}.{table_name}"
+  
+  # Connection pool settings for high throughput
+  max_pool_connections: 25
+  connect_timeout: 10
+  read_timeout: 10
+  
+  # Retry configuration
+  retry_mode: adaptive              # adaptive, standard, or legacy
+  total_max_retry_attempts: 5
+  
+  # Optional: AWS resource tags
+  # tags:
+  #   Environment: production
+  #   Team: insurance-ml
+
+# Entity key serialization version (use v3 for optimal performance)
+entity_key_serialization_version: 3
+
+# Feature Server Configuration (optional - for feast serve command)
+# feature_server:
+#   type: local
+#   host: 0.0.0.0
+#   port: 6566
+
+# Logging Configuration (optional)
+# go_feature_serving: true  # Use Go feature server for lower latency
