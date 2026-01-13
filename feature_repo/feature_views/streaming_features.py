@@ -25,12 +25,9 @@ from data_sources import (
     KAFKA_AVAILABLE,
 )
 
-# Try to import StreamFeatureView - requires proper Feast installation
-try:
-    from feast import StreamFeatureView, stream_feature_view
-    STREAM_FV_AVAILABLE = True
-except ImportError:
-    STREAM_FV_AVAILABLE = False
+# StreamFeatureView requires Kafka and specific Feast configuration
+# Disabled for this demo - enable when Kafka is configured
+STREAM_FV_AVAILABLE = False
 
 
 # =============================================================================

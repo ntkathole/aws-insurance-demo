@@ -461,15 +461,67 @@ class InsuranceDataGenerator:
 # REDSHIFT OPERATIONS
 # =============================================================================
 
-def get_connection(host: str, database: str, user: str, password: str, port: int = 5439):
-    """Create a Redshift connection."""
-    return redshift_connector.connect(
-        host=host,
-        database=database,
-        user=user,
-        password=password,
-        port=port,
-    )
+def get_connection(
+    host: str = None,
+    database: str = None,
+    user: str = None,
+    password: str = None,
+    port: int = 5439,
+    iam: bool = False,
+    cluster_identifier: str = None,
+    region: str = "us-east-1",
+    profile: str = None,
+    role_arn: str = None,
+    access_key_id: str = None,
+    secret_access_key: str = None,
+    session_token: str = None,
+):
+    """Create a Redshift connection (supports password, IAM, and role-based auth)."""
+    if iam:
+        # IAM authentication - no password needed
+        connect_params = {
+            "iam": True,
+            "database": database,
+            "db_user": user,
+            "cluster_identifier": cluster_identifier,
+            "region": region,
+        }
+        
+        # If role ARN provided, assume the role first
+        if role_arn:
+            if not BOTO3_AVAILABLE:
+                raise ImportError("boto3 is required for IAM role assumption. Install with: pip install boto3")
+            
+            print(f"  Assuming IAM role: {role_arn}")
+            sts_client = boto3.client('sts', region_name=region)
+            assumed_role = sts_client.assume_role(
+                RoleArn=role_arn,
+                RoleSessionName="FeastRedshiftSetup"
+            )
+            credentials = assumed_role['Credentials']
+            connect_params["access_key_id"] = credentials['AccessKeyId']
+            connect_params["secret_access_key"] = credentials['SecretAccessKey']
+            connect_params["session_token"] = credentials['SessionToken']
+        elif access_key_id and secret_access_key:
+            # Use provided credentials directly
+            connect_params["access_key_id"] = access_key_id
+            connect_params["secret_access_key"] = secret_access_key
+            if session_token:
+                connect_params["session_token"] = session_token
+        elif profile:
+            connect_params["profile"] = profile
+            
+        print(f"  Using IAM authentication (cluster: {cluster_identifier}, region: {region})")
+        return redshift_connector.connect(**connect_params)
+    else:
+        # Traditional password authentication
+        return redshift_connector.connect(
+            host=host,
+            database=database,
+            user=user,
+            password=password,
+            port=port,
+        )
 
 
 def create_tables(conn) -> None:
@@ -483,13 +535,17 @@ def create_tables(conn) -> None:
     # Create schema
     print("  Creating schema 'insurance'...")
     cursor.execute(CREATE_SCHEMA_SQL)
+    conn.commit()
     
-    # Create tables
+    # Create tables - execute each statement separately
     for table_name, ddl in TABLE_DEFINITIONS.items():
         print(f"  Creating table {table_name}...")
-        cursor.execute(ddl)
+        # Split DDL into individual statements and execute each
+        statements = [stmt.strip() for stmt in ddl.split(';') if stmt.strip()]
+        for stmt in statements:
+            cursor.execute(stmt)
+            conn.commit()
     
-    conn.commit()
     cursor.close()
     print("  ✓ All tables created successfully!")
 
@@ -672,27 +728,41 @@ Examples:
   # MODE 1: Local testing only (no AWS required)
   python setup_redshift_data.py --local-only --output-dir ../data/sample --num-customers 1000
 
-  # MODE 2: Load to Redshift with environment variables
-  export REDSHIFT_HOST=my-cluster.xxxxx.us-west-2.redshift.amazonaws.com
-  export REDSHIFT_DATABASE=insurance_features
-  export REDSHIFT_USER=feast_user
-  export REDSHIFT_PASSWORD=mypassword
-  python setup_redshift_data.py --num-customers 10000
+  # MODE 2: Load to Redshift with IAM authentication
+  python setup_redshift_data.py \\
+      --iam \\
+      --cluster-identifier my-redshift-cluster \\
+      --database feast_db \\
+      --user feast_user \\
+      --region us-east-1 \\
+      --num-customers 10000
 
-  # MODE 3: Load to Redshift with command line arguments
+  # MODE 3: Load to Redshift with IAM role assumption
+  python setup_redshift_data.py \\
+      --iam \\
+      --cluster-identifier my-redshift-cluster \\
+      --database feast_db \\
+      --user feast_user \\
+      --region us-east-1 \\
+      --role-arn arn:aws:iam::123456789012:role/RedshiftAccessRole \\
+      --num-customers 10000
+
+  # MODE 4: Load to Redshift with password authentication
   python setup_redshift_data.py \\
       --host my-cluster.xxxxx.us-west-2.redshift.amazonaws.com \\
-      --database insurance_features \\
+      --database feast_db \\
       --user feast_user \\
       --password mypassword \\
       --num-customers 10000
 
-  # MODE 4: For large datasets, use S3 COPY (faster)
+  # MODE 5: For large datasets, use S3 COPY (faster)
   python setup_redshift_data.py \\
+      --iam \\
+      --cluster-identifier my-redshift-cluster \\
       --num-customers 100000 \\
       --use-s3 \\
       --s3-bucket my-feast-bucket \\
-      --iam-role arn:aws:iam::123456789012:role/RedshiftS3Role
+      --s3-iam-role arn:aws:iam::123456789012:role/RedshiftS3Role
         """
     )
     
@@ -702,16 +772,28 @@ Examples:
     parser.add_argument("--output-dir", default="../data/sample",
                        help="Output directory for local parquet files (with --local-only)")
     
-    # Connection arguments
+    # IAM authentication arguments
+    parser.add_argument("--iam", action="store_true",
+                       help="Use IAM authentication (no password required)")
+    parser.add_argument("--cluster-identifier", default=os.environ.get("REDSHIFT_CLUSTER_ID"),
+                       help="Redshift cluster identifier (for IAM auth)")
+    parser.add_argument("--role-arn", default=os.environ.get("AWS_ROLE_ARN"),
+                       help="IAM role ARN to assume for authentication")
+    parser.add_argument("--profile", default=os.environ.get("AWS_PROFILE"),
+                       help="AWS profile name (optional, for IAM auth)")
+    
+    # Connection arguments (password auth)
     parser.add_argument("--host", default=os.environ.get("REDSHIFT_HOST"),
-                       help="Redshift cluster endpoint (or set REDSHIFT_HOST env var)")
-    parser.add_argument("--database", default=os.environ.get("REDSHIFT_DATABASE", "insurance_features"),
+                       help="Redshift cluster endpoint (for password auth)")
+    parser.add_argument("--database", default=os.environ.get("REDSHIFT_DATABASE", "feast_db"),
                        help="Redshift database name")
     parser.add_argument("--user", default=os.environ.get("REDSHIFT_USER"),
-                       help="Redshift username (or set REDSHIFT_USER env var)")
+                       help="Redshift username")
     parser.add_argument("--password", default=os.environ.get("REDSHIFT_PASSWORD"),
-                       help="Redshift password (or set REDSHIFT_PASSWORD env var)")
+                       help="Redshift password (for password auth)")
     parser.add_argument("--port", type=int, default=5439, help="Redshift port (default: 5439)")
+    parser.add_argument("--region", default=os.environ.get("AWS_REGION", "us-east-1"), 
+                       help="AWS region")
     
     # Data generation arguments
     parser.add_argument("--num-customers", type=int, default=10000,
@@ -721,11 +803,10 @@ Examples:
     
     # S3 arguments for faster loading
     parser.add_argument("--use-s3", action="store_true",
-                       help="Use S3 COPY for faster loading (requires --s3-bucket and --iam-role)")
+                       help="Use S3 COPY for faster loading (requires --s3-bucket and --s3-iam-role)")
     parser.add_argument("--s3-bucket", help="S3 bucket for staging data")
     parser.add_argument("--s3-prefix", default="feast-staging", help="S3 prefix for staging files")
-    parser.add_argument("--iam-role", help="IAM role ARN for Redshift to access S3")
-    parser.add_argument("--region", default="us-west-2", help="AWS region")
+    parser.add_argument("--s3-iam-role", help="IAM role ARN for Redshift to access S3")
     
     # Other options
     parser.add_argument("--skip-tables", action="store_true", help="Skip table creation (tables already exist)")
@@ -739,24 +820,42 @@ Examples:
         return
     
     # Validate required arguments for Redshift mode
-    if not args.host:
-        parser.error("--host is required (or set REDSHIFT_HOST env var). Use --local-only for local testing.")
-    if not args.user:
-        parser.error("--user is required (or set REDSHIFT_USER env var). Use --local-only for local testing.")
-    if not args.password:
-        parser.error("--password is required (or set REDSHIFT_PASSWORD env var). Use --local-only for local testing.")
+    if args.iam:
+        # IAM authentication
+        if not args.cluster_identifier:
+            parser.error("--cluster-identifier is required when using --iam")
+        if not args.user:
+            parser.error("--user is required (db_user for IAM auth)")
+        if not args.database:
+            parser.error("--database is required")
+    else:
+        # Password authentication
+        if not args.host:
+            parser.error("--host is required (or use --iam for IAM auth). Use --local-only for local testing.")
+        if not args.user:
+            parser.error("--user is required. Use --local-only for local testing.")
+        if not args.password:
+            parser.error("--password is required (or use --iam for IAM auth). Use --local-only for local testing.")
     
     if args.use_s3:
         if not args.s3_bucket:
             parser.error("--s3-bucket is required when using --use-s3")
-        if not args.iam_role:
-            parser.error("--iam-role is required when using --use-s3")
+        if not args.s3_iam_role:
+            parser.error("--s3-iam-role is required when using --use-s3")
     
     # Print configuration
     print("\n" + "=" * 60)
     print("AWS INSURANCE DEMO - REDSHIFT DATA SETUP")
     print("=" * 60)
-    print(f"Host: {args.host}")
+    if args.iam:
+        print(f"Auth: IAM (cluster: {args.cluster_identifier})")
+        print(f"Region: {args.region}")
+        if args.role_arn:
+            print(f"Role ARN: {args.role_arn}")
+        elif args.profile:
+            print(f"Profile: {args.profile}")
+    else:
+        print(f"Host: {args.host}")
     print(f"Database: {args.database}")
     print(f"User: {args.user}")
     print(f"Customers to generate: {args.num_customers:,}")
@@ -764,7 +863,18 @@ Examples:
     
     # Connect to Redshift
     print("\nConnecting to Redshift...")
-    conn = get_connection(args.host, args.database, args.user, args.password, args.port)
+    conn = get_connection(
+        host=args.host,
+        database=args.database,
+        user=args.user,
+        password=args.password,
+        port=args.port,
+        iam=args.iam,
+        cluster_identifier=args.cluster_identifier,
+        region=args.region,
+        profile=args.profile,
+        role_arn=args.role_arn,
+    )
     print("  ✓ Connected!")
     
     try:
@@ -818,7 +928,7 @@ Examples:
             if args.use_s3:
                 load_dataframe_via_s3(
                     conn, table_name, df,
-                    args.s3_bucket, args.s3_prefix, args.iam_role, args.region
+                    args.s3_bucket, args.s3_prefix, args.s3_iam_role, args.region
                 )
             else:
                 load_dataframe_direct(conn, table_name, df)
