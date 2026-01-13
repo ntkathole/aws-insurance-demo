@@ -14,6 +14,7 @@ These are critical for:
 
 from typing import Any, Dict
 
+import numpy as np
 import pandas as pd
 
 from feast import Field, RequestSource
@@ -177,7 +178,10 @@ def underwriting_risk_score(inputs: pd.DataFrame) -> pd.DataFrame:
         (df["composite_risk_score"] >= 30) & (df["composite_risk_score"] < 50),
     ]
     choices = ["auto_approve", "auto_approve_with_conditions", "manual_review"]
-    df["underwriting_decision"] = pd.np.select(conditions, choices, default="decline")
+    df["underwriting_decision"] = pd.Series(
+        np.select(conditions, choices, default="decline"),
+        index=df.index
+    )
     
     # Manual review flag
     df["manual_review_flag"] = (
@@ -221,90 +225,67 @@ def underwriting_risk_score(inputs: pd.DataFrame) -> pd.DataFrame:
         Field(name="estimated_monthly_premium", dtype=Float64),
         Field(name="estimated_annual_premium", dtype=Float64),
     ],
-    mode="python",  # Using native Python mode for performance
+    mode="pandas",
     description="Dynamic premium calculation based on risk factors",
     tags={"domain": "underwriting", "use_case": "pcm", "real_time": "true"},
 )
-def premium_calculator(inputs: Dict[str, Any]) -> Dict[str, Any]:
+def premium_calculator(inputs: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate estimated premium using native Python mode for low latency.
+    Calculate estimated premium based on customer profile and request parameters.
+    """
+    df = pd.DataFrame()
     
-    This on-demand feature view uses 'python' mode for faster execution
-    during online serving compared to pandas mode.
-    """
     # Age factor (drivers 25-65 get best rates)
-    age = inputs.get("age", 35)
-    if age < 25:
-        age_factor = 1.4
-    elif age < 30:
-        age_factor = 1.1
-    elif age <= 65:
-        age_factor = 1.0
-    elif age <= 75:
-        age_factor = 1.2
-    else:
-        age_factor = 1.5
+    age = inputs["age"].fillna(35)
+    df["age_factor"] = np.select(
+        [age < 25, age < 30, age <= 65, age <= 75],
+        [1.4, 1.1, 1.0, 1.2],
+        default=1.5
+    )
     
     # Location factor based on region risk zone
-    region_risk = inputs.get("region_risk_zone", 3)
-    location_factors = {1: 0.85, 2: 0.95, 3: 1.0, 4: 1.15, 5: 1.35}
-    location_factor = location_factors.get(region_risk, 1.0)
+    region_risk = inputs["region_risk_zone"].fillna(3)
+    df["location_factor"] = region_risk.map({1: 0.85, 2: 0.95, 3: 1.0, 4: 1.15, 5: 1.35}).fillna(1.0)
     
     # Vehicle age factor
-    vehicle_age = inputs.get("vehicle_age", 3)
-    if vehicle_age <= 2:
-        vehicle_age_factor = 1.15  # New cars cost more to repair
-    elif vehicle_age <= 5:
-        vehicle_age_factor = 1.0
-    elif vehicle_age <= 10:
-        vehicle_age_factor = 0.9
-    else:
-        vehicle_age_factor = 0.85
+    vehicle_age = inputs["vehicle_age"].fillna(3)
+    df["vehicle_age_factor"] = np.select(
+        [vehicle_age <= 2, vehicle_age <= 5, vehicle_age <= 10],
+        [1.15, 1.0, 0.9],
+        default=0.85
+    )
     
     # Coverage factor
-    requested_coverage = inputs.get("requested_coverage", 100000)
-    coverage_factor = 0.8 + (requested_coverage / 500000) * 0.4
-    coverage_factor = min(max(coverage_factor, 0.8), 1.4)
+    requested_coverage = inputs["requested_coverage"].fillna(100000)
+    df["coverage_factor"] = (0.8 + (requested_coverage / 500000) * 0.4).clip(0.8, 1.4)
     
     # Deductible credit (higher deductible = lower premium)
-    deductible = inputs.get("requested_deductible", 500)
-    deductible_credit = max(0.7, 1.0 - (deductible / 5000))
+    deductible = inputs["requested_deductible"].fillna(500)
+    df["deductible_credit"] = (1.0 - (deductible / 5000)).clip(0.7, 1.0)
     
     # Base premium calculation
     base_rate = 800  # Base annual rate
-    estimated_base_premium = (
+    df["estimated_base_premium"] = (
         base_rate *
-        age_factor *
-        location_factor *
-        vehicle_age_factor *
-        coverage_factor *
-        deductible_credit
-    )
+        df["age_factor"] *
+        df["location_factor"] *
+        df["vehicle_age_factor"] *
+        df["coverage_factor"] *
+        df["deductible_credit"]
+    ).round(2)
     
     # Apply credit score adjustment
-    credit_score = inputs.get("credit_score", 700)
-    if credit_score >= 800:
-        credit_adj = 0.85
-    elif credit_score >= 700:
-        credit_adj = 1.0
-    elif credit_score >= 600:
-        credit_adj = 1.15
-    else:
-        credit_adj = 1.35
+    credit_score = inputs["credit_score"].fillna(700)
+    credit_adj = np.select(
+        [credit_score >= 800, credit_score >= 700, credit_score >= 600],
+        [0.85, 1.0, 1.15],
+        default=1.35
+    )
     
-    estimated_annual_premium = estimated_base_premium * credit_adj
-    estimated_monthly_premium = estimated_annual_premium / 12
+    df["estimated_annual_premium"] = (df["estimated_base_premium"] * credit_adj).round(2)
+    df["estimated_monthly_premium"] = (df["estimated_annual_premium"] / 12).round(2)
     
-    return {
-        "age_factor": round(age_factor, 4),
-        "location_factor": round(location_factor, 4),
-        "vehicle_age_factor": round(vehicle_age_factor, 4),
-        "coverage_factor": round(coverage_factor, 4),
-        "deductible_credit": round(deductible_credit, 4),
-        "estimated_base_premium": round(estimated_base_premium, 2),
-        "estimated_monthly_premium": round(estimated_monthly_premium, 2),
-        "estimated_annual_premium": round(estimated_annual_premium, 2),
-    }
+    return df
 
 
 # =============================================================================

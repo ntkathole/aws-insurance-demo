@@ -214,6 +214,145 @@ TABLE_DEFINITIONS = {
         DISTKEY(customer_id)
         SORTKEY(event_timestamp);
     """,
+    
+    "insurance.policy_details": """
+        DROP TABLE IF EXISTS insurance.policy_details;
+        CREATE TABLE insurance.policy_details (
+            policy_id VARCHAR(20) NOT NULL,
+            customer_id VARCHAR(20) NOT NULL,
+            policy_type VARCHAR(20),
+            product_code VARCHAR(20),
+            coverage_amount DECIMAL(15, 2),
+            deductible DECIMAL(10, 2),
+            premium_monthly DECIMAL(10, 2),
+            premium_annual DECIMAL(10, 2),
+            policy_start_date VARCHAR(20),
+            policy_term_months INT,
+            days_until_renewal INT,
+            has_collision BOOLEAN,
+            has_comprehensive BOOLEAN,
+            has_liability BOOLEAN,
+            has_uninsured_motorist BOOLEAN,
+            has_roadside BOOLEAN,
+            multi_policy_discount BOOLEAN,
+            safe_driver_discount BOOLEAN,
+            paperless_discount BOOLEAN,
+            total_discount_pct DECIMAL(5, 2),
+            vehicle_year INT,
+            vehicle_make VARCHAR(50),
+            vehicle_value DECIMAL(15, 2),
+            event_timestamp TIMESTAMP NOT NULL,
+            created_at TIMESTAMP,
+            PRIMARY KEY (policy_id)
+        )
+        DISTKEY(customer_id)
+        SORTKEY(event_timestamp);
+    """,
+    
+    "insurance.claims_aggregations": """
+        DROP TABLE IF EXISTS insurance.claims_aggregations;
+        CREATE TABLE insurance.claims_aggregations (
+            customer_id VARCHAR(20) NOT NULL,
+            total_claims_lifetime INT,
+            claims_count_1y INT,
+            claims_count_3y INT,
+            claims_count_5y INT,
+            total_claims_amount_lifetime DECIMAL(15, 2),
+            total_claims_amount_1y DECIMAL(15, 2),
+            total_claims_amount_3y DECIMAL(15, 2),
+            avg_claim_amount DECIMAL(15, 2),
+            max_claim_amount DECIMAL(15, 2),
+            avg_days_between_claims DECIMAL(10, 2),
+            days_since_last_claim INT,
+            claim_frequency_score DECIMAL(5, 2),
+            pct_claims_approved DECIMAL(5, 2),
+            pct_claims_denied DECIMAL(5, 2),
+            avg_approval_ratio DECIMAL(5, 2),
+            fraud_claims_count INT,
+            siu_referral_count INT,
+            suspicious_claim_ratio DECIMAL(5, 2),
+            auto_claims_count INT,
+            property_claims_count INT,
+            liability_claims_count INT,
+            medical_claims_count INT,
+            avg_settlement_days DECIMAL(10, 2),
+            litigation_rate DECIMAL(5, 2),
+            event_timestamp TIMESTAMP NOT NULL,
+            created_at TIMESTAMP,
+            PRIMARY KEY (customer_id)
+        )
+        DISTKEY(customer_id)
+        SORTKEY(event_timestamp);
+    """,
+    
+    "insurance.lab_results": """
+        DROP TABLE IF EXISTS insurance.lab_results;
+        CREATE TABLE insurance.lab_results (
+            customer_id VARCHAR(20) NOT NULL,
+            latest_test_date VARCHAR(20),
+            test_provider VARCHAR(100),
+            overall_health_score DECIMAL(5, 1),
+            cardiovascular_score DECIMAL(5, 1),
+            metabolic_score DECIMAL(5, 1),
+            liver_function_score DECIMAL(5, 1),
+            kidney_function_score DECIMAL(5, 1),
+            bmi_category VARCHAR(20),
+            smoker_status VARCHAR(20),
+            blood_pressure_category VARCHAR(20),
+            cholesterol_category VARCHAR(20),
+            diabetes_risk_level VARCHAR(20),
+            glucose_category VARCHAR(20),
+            a1c_category VARCHAR(20),
+            ldl_category VARCHAR(20),
+            hdl_category VARCHAR(20),
+            triglycerides_category VARCHAR(20),
+            health_trend_6m VARCHAR(20),
+            risk_trend_6m VARCHAR(20),
+            num_abnormal_results INT,
+            regular_checkups_flag BOOLEAN,
+            medication_adherence_score DECIMAL(5, 1),
+            event_timestamp TIMESTAMP NOT NULL,
+            created_at TIMESTAMP,
+            PRIMARY KEY (customer_id)
+        )
+        DISTKEY(customer_id)
+        SORTKEY(event_timestamp);
+    """,
+    
+    "insurance.provider_network": """
+        DROP TABLE IF EXISTS insurance.provider_network;
+        CREATE TABLE insurance.provider_network (
+            provider_id VARCHAR(20) NOT NULL,
+            provider_name VARCHAR(200),
+            provider_type VARCHAR(50),
+            specialty VARCHAR(100),
+            network_status VARCHAR(20),
+            quality_score DECIMAL(3, 1),
+            patient_satisfaction_score DECIMAL(5, 1),
+            cost_efficiency_score DECIMAL(5, 1),
+            outcome_score DECIMAL(5, 1),
+            claims_volume_monthly INT,
+            unique_patients_monthly INT,
+            avg_claim_amount DECIMAL(15, 2),
+            fraud_risk_score DECIMAL(5, 1),
+            billing_anomaly_score DECIMAL(5, 1),
+            siu_investigation_count INT,
+            suspended_flag BOOLEAN,
+            referral_count_to INT,
+            referral_count_from INT,
+            network_centrality_score DECIMAL(5, 2),
+            state VARCHAR(2),
+            region VARCHAR(50),
+            urban_rural VARCHAR(20),
+            accredited_flag BOOLEAN,
+            years_in_network INT,
+            event_timestamp TIMESTAMP NOT NULL,
+            created_at TIMESTAMP,
+            PRIMARY KEY (provider_id)
+        )
+        DISTKEY(provider_id)
+        SORTKEY(event_timestamp);
+    """,
 }
 
 
@@ -455,6 +594,200 @@ class InsuranceDataGenerator:
             'event_timestamp': self._generate_timestamps(num_transactions, end_date - timedelta(days=30), end_date),
             'created_at': [end_date - timedelta(days=random.randint(0, 30)) for _ in range(num_transactions)],
         })
+    
+    def generate_policy_details(self, customer_ids: List[str], end_date: datetime) -> pd.DataFrame:
+        """Generate policy details for customers."""
+        print(f"  Generating policy data for {len(customer_ids)} customers...")
+        
+        policies = []
+        policy_types = ['Auto', 'Home', 'Life', 'Health']
+        vehicle_makes = ['Toyota', 'Honda', 'Ford', 'Chevrolet', 'BMW', 'Tesla', 'Nissan', 'Hyundai', 'Kia', 'Subaru']
+        
+        for i, customer_id in enumerate(customer_ids):
+            num_policies = random.choices([1, 2, 3], weights=[0.6, 0.3, 0.1])[0]
+            for j in range(num_policies):
+                policy_id = f"POL{i:08d}{j:02d}"
+                policy_type = random.choice(policy_types)
+                coverage = random.uniform(50000, 500000)
+                deductible = random.choice([250, 500, 1000, 2000])
+                premium_monthly = coverage * random.uniform(0.002, 0.008) / 12
+                
+                policies.append({
+                    'policy_id': policy_id,
+                    'customer_id': customer_id,
+                    'policy_type': policy_type,
+                    'product_code': f"{policy_type[:3].upper()}{random.randint(100, 999)}",
+                    'coverage_amount': round(coverage, 2),
+                    'deductible': deductible,
+                    'premium_monthly': round(premium_monthly, 2),
+                    'premium_annual': round(premium_monthly * 12, 2),
+                    'policy_start_date': (end_date - timedelta(days=random.randint(30, 730))).strftime('%Y-%m-%d'),
+                    'policy_term_months': random.choice([6, 12, 24]),
+                    'days_until_renewal': random.randint(1, 365),
+                    'has_collision': random.random() > 0.3,
+                    'has_comprehensive': random.random() > 0.4,
+                    'has_liability': True,
+                    'has_uninsured_motorist': random.random() > 0.5,
+                    'has_roadside': random.random() > 0.6,
+                    'multi_policy_discount': random.random() > 0.7,
+                    'safe_driver_discount': random.random() > 0.6,
+                    'paperless_discount': random.random() > 0.5,
+                    'total_discount_pct': round(random.uniform(0, 25), 2),
+                    'vehicle_year': random.randint(2010, 2024),
+                    'vehicle_make': random.choice(vehicle_makes),
+                    'vehicle_value': round(random.uniform(10000, 80000), 2),
+                    'event_timestamp': end_date - timedelta(days=random.randint(0, 30)),
+                    'created_at': end_date - timedelta(days=random.randint(30, 365)),
+                })
+        
+        return pd.DataFrame(policies)
+    
+    def generate_claims_aggregations(self, customer_ids: List[str], claims_df: pd.DataFrame, end_date: datetime) -> pd.DataFrame:
+        """Generate pre-computed claims aggregations per customer."""
+        print(f"  Generating claims aggregations for {len(customer_ids)} customers...")
+        
+        # Group claims by customer for realistic aggregations
+        claims_by_customer = claims_df.groupby('customer_id').agg({
+            'claim_id': 'count',
+            'claim_amount_requested': ['sum', 'mean', 'max'],
+            'claim_amount_approved': 'sum',
+            'siu_referral': 'sum',
+            'fraud_score': 'mean',
+            'days_to_settlement': 'mean',
+            'litigation_flag': 'mean',
+        }).reset_index()
+        claims_by_customer.columns = ['customer_id', 'total_claims', 'total_amount', 'avg_amount', 'max_amount', 
+                                       'approved_amount', 'siu_count', 'avg_fraud_score', 'avg_settlement', 'litigation_rate']
+        claims_lookup = dict(zip(claims_by_customer['customer_id'], claims_by_customer.to_dict('records')))
+        
+        aggregations = []
+        for customer_id in customer_ids:
+            claim_data = claims_lookup.get(customer_id, {})
+            total_claims = claim_data.get('total_claims', 0) if claim_data else 0
+            
+            aggregations.append({
+                'customer_id': customer_id,
+                'total_claims_lifetime': total_claims,
+                'claims_count_1y': min(total_claims, random.randint(0, 3)),
+                'claims_count_3y': min(total_claims, random.randint(0, 5)),
+                'claims_count_5y': total_claims,
+                'total_claims_amount_lifetime': round(claim_data.get('total_amount', 0), 2) if claim_data else 0,
+                'total_claims_amount_1y': round(claim_data.get('total_amount', 0) * 0.3, 2) if claim_data else 0,
+                'total_claims_amount_3y': round(claim_data.get('total_amount', 0) * 0.7, 2) if claim_data else 0,
+                'avg_claim_amount': round(claim_data.get('avg_amount', 0), 2) if claim_data else 0,
+                'max_claim_amount': round(claim_data.get('max_amount', 0), 2) if claim_data else 0,
+                'avg_days_between_claims': round(random.uniform(30, 365), 2) if total_claims > 1 else 0,
+                'days_since_last_claim': random.randint(30, 1000) if total_claims > 0 else 9999,
+                'claim_frequency_score': round(min(total_claims / 3, 1.0), 2),
+                'pct_claims_approved': round(random.uniform(0.6, 0.95), 2) if total_claims > 0 else 0,
+                'pct_claims_denied': round(random.uniform(0.05, 0.3), 2) if total_claims > 0 else 0,
+                'avg_approval_ratio': round(random.uniform(0.7, 0.95), 2) if total_claims > 0 else 0,
+                'fraud_claims_count': random.choices([0, 1], weights=[0.95, 0.05])[0] if total_claims > 0 else 0,
+                'siu_referral_count': int(claim_data.get('siu_count', 0)) if claim_data else 0,
+                'suspicious_claim_ratio': round(random.uniform(0, 0.1), 2),
+                'auto_claims_count': random.randint(0, total_claims),
+                'property_claims_count': random.randint(0, max(0, total_claims - 1)),
+                'liability_claims_count': random.randint(0, max(0, total_claims - 2)),
+                'medical_claims_count': random.randint(0, max(0, total_claims - 2)),
+                'avg_settlement_days': round(claim_data.get('avg_settlement', 30), 2) if claim_data else 0,
+                'litigation_rate': round(claim_data.get('litigation_rate', 0), 2) if claim_data else 0,
+                'event_timestamp': end_date - timedelta(days=random.randint(0, 1)),
+                'created_at': end_date - timedelta(days=random.randint(0, 7)),
+            })
+        
+        return pd.DataFrame(aggregations)
+    
+    def generate_lab_results(self, customer_ids: List[str], end_date: datetime) -> pd.DataFrame:
+        """Generate lab results for health assessments."""
+        print(f"  Generating lab results for {len(customer_ids)} customers...")
+        
+        bmi_categories = ['Underweight', 'Normal', 'Overweight', 'Obese']
+        smoker_statuses = ['Never', 'Former', 'Current']
+        bp_categories = ['Normal', 'Elevated', 'Stage 1', 'Stage 2']
+        cholesterol_categories = ['Desirable', 'Borderline', 'High']
+        risk_levels = ['Low', 'Moderate', 'High']
+        trends = ['Improving', 'Stable', 'Declining']
+        test_providers = ['LabCorp', 'Quest Diagnostics', 'BioReference', 'Sonic Healthcare', 'Eurofins']
+        
+        results = []
+        for customer_id in customer_ids:
+            overall_health = random.uniform(40, 95)
+            
+            results.append({
+                'customer_id': customer_id,
+                'latest_test_date': (end_date - timedelta(days=random.randint(30, 365))).strftime('%Y-%m-%d'),
+                'test_provider': random.choice(test_providers),
+                'overall_health_score': round(overall_health, 1),
+                'cardiovascular_score': round(overall_health + random.uniform(-15, 15), 1),
+                'metabolic_score': round(overall_health + random.uniform(-10, 10), 1),
+                'liver_function_score': round(overall_health + random.uniform(-10, 15), 1),
+                'kidney_function_score': round(overall_health + random.uniform(-10, 15), 1),
+                'bmi_category': random.choices(bmi_categories, weights=[0.05, 0.4, 0.35, 0.2])[0],
+                'smoker_status': random.choices(smoker_statuses, weights=[0.6, 0.25, 0.15])[0],
+                'blood_pressure_category': random.choices(bp_categories, weights=[0.5, 0.25, 0.15, 0.1])[0],
+                'cholesterol_category': random.choices(cholesterol_categories, weights=[0.5, 0.3, 0.2])[0],
+                'diabetes_risk_level': random.choices(risk_levels, weights=[0.6, 0.3, 0.1])[0],
+                'glucose_category': random.choices(['Normal', 'Pre-diabetic', 'Diabetic'], weights=[0.7, 0.2, 0.1])[0],
+                'a1c_category': random.choices(['Normal', 'Pre-diabetic', 'Diabetic'], weights=[0.7, 0.2, 0.1])[0],
+                'ldl_category': random.choices(['Optimal', 'Near Optimal', 'Borderline', 'High'], weights=[0.4, 0.3, 0.2, 0.1])[0],
+                'hdl_category': random.choices(['Low', 'Normal', 'High'], weights=[0.2, 0.6, 0.2])[0],
+                'triglycerides_category': random.choices(['Normal', 'Borderline', 'High'], weights=[0.6, 0.25, 0.15])[0],
+                'health_trend_6m': random.choices(trends, weights=[0.3, 0.5, 0.2])[0],
+                'risk_trend_6m': random.choices(trends, weights=[0.25, 0.5, 0.25])[0],
+                'num_abnormal_results': random.choices([0, 1, 2, 3, 4], weights=[0.4, 0.3, 0.15, 0.1, 0.05])[0],
+                'regular_checkups_flag': random.random() > 0.3,
+                'medication_adherence_score': round(random.uniform(60, 100), 1),
+                'event_timestamp': end_date - timedelta(days=random.randint(0, 30)),
+                'created_at': end_date - timedelta(days=random.randint(30, 180)),
+            })
+        
+        return pd.DataFrame(results)
+    
+    def generate_provider_network(self, num_providers: int, end_date: datetime) -> pd.DataFrame:
+        """Generate provider network data."""
+        print(f"  Generating {num_providers} provider records...")
+        
+        provider_types = ['Hospital', 'Clinic', 'Specialist', 'Lab', 'Pharmacy', 'Urgent Care', 'Imaging Center']
+        specialties = ['General Practice', 'Cardiology', 'Orthopedics', 'Neurology', 'Oncology', 
+                       'Pediatrics', 'Dermatology', 'Radiology', 'Emergency Medicine', 'Internal Medicine']
+        network_statuses = ['In-Network', 'Out-of-Network', 'Preferred']
+        regions = ['Northeast', 'Southeast', 'Midwest', 'Southwest', 'West', 'Pacific']
+        
+        providers = []
+        for i in range(num_providers):
+            provider_id = f"PROV{i:06d}"
+            quality = random.uniform(2.5, 5.0)
+            
+            providers.append({
+                'provider_id': provider_id,
+                'provider_name': f"Provider {i} Medical Center",
+                'provider_type': random.choice(provider_types),
+                'specialty': random.choice(specialties),
+                'network_status': random.choices(network_statuses, weights=[0.7, 0.15, 0.15])[0],
+                'quality_score': round(quality, 1),
+                'patient_satisfaction_score': round(quality + random.uniform(-0.5, 0.5), 1),
+                'cost_efficiency_score': round(random.uniform(50, 95), 1),
+                'outcome_score': round(quality * 20 + random.uniform(-10, 10), 1),
+                'claims_volume_monthly': random.randint(50, 5000),
+                'unique_patients_monthly': random.randint(30, 3000),
+                'avg_claim_amount': round(random.uniform(200, 5000), 2),
+                'fraud_risk_score': round(random.uniform(0, 30), 1),
+                'billing_anomaly_score': round(random.uniform(0, 40), 1),
+                'siu_investigation_count': random.choices([0, 1, 2], weights=[0.9, 0.08, 0.02])[0],
+                'suspended_flag': random.random() < 0.01,
+                'referral_count_to': random.randint(0, 500),
+                'referral_count_from': random.randint(0, 300),
+                'network_centrality_score': round(random.uniform(0, 1), 2),
+                'state': random.choice(['CA', 'TX', 'FL', 'NY', 'PA', 'IL', 'OH', 'GA', 'NC', 'MI']),
+                'region': random.choice(regions),
+                'urban_rural': random.choices(['Urban', 'Suburban', 'Rural'], weights=[0.5, 0.35, 0.15])[0],
+                'accredited_flag': random.random() > 0.1,
+                'years_in_network': random.randint(1, 25),
+                'event_timestamp': end_date - timedelta(days=random.randint(0, 7)),
+                'created_at': end_date - timedelta(days=random.randint(30, 365)),
+            })
+        
+        return pd.DataFrame(providers)
 
 
 # =============================================================================
@@ -680,6 +1013,14 @@ def generate_local_files(num_customers: int, output_dir: str, seed: int = 42) ->
     num_transactions = num_customers * 50
     transactions_df = generator.generate_transactions(customer_ids, num_transactions, end_date)
     
+    # Generate additional tables
+    policy_df = generator.generate_policy_details(customer_ids, end_date)
+    claims_agg_df = generator.generate_claims_aggregations(customer_ids, claims_df, end_date)
+    lab_df = generator.generate_lab_results(customer_ids, end_date)
+    
+    num_providers = max(1000, num_customers // 10)
+    provider_df = generator.generate_provider_network(num_providers, end_date)
+    
     # Save to parquet files
     datasets = {
         'profiles': ('customer_profiles.parquet', profiles_df),
@@ -687,6 +1028,10 @@ def generate_local_files(num_customers: int, output_dir: str, seed: int = 42) ->
         'risk': ('customer_risk.parquet', risk_df),
         'claims': ('claims_history.parquet', claims_df),
         'transactions': ('transactions.parquet', transactions_df),
+        'policies': ('policy_details.parquet', policy_df),
+        'claims_aggregations': ('claims_aggregations.parquet', claims_agg_df),
+        'lab_results': ('lab_results.parquet', lab_df),
+        'providers': ('provider_network.parquet', provider_df),
     }
     
     print("\n  Saving files...")
@@ -704,6 +1049,10 @@ def generate_local_files(num_customers: int, output_dir: str, seed: int = 42) ->
     print(f"Customer risk: {len(risk_df):,} records")
     print(f"Claims history: {len(claims_df):,} records")
     print(f"Transactions: {len(transactions_df):,} records")
+    print(f"Policies: {len(policy_df):,} records")
+    print(f"Claims aggregations: {len(claims_agg_df):,} records")
+    print(f"Lab results: {len(lab_df):,} records")
+    print(f"Provider network: {len(provider_df):,} records")
     print("\nNext steps for local testing:")
     print("  1. Update feature_store.yaml to use file sources")
     print("  2. Run: cd ../feature_repo && feast apply")
@@ -716,6 +1065,10 @@ def generate_local_files(num_customers: int, output_dir: str, seed: int = 42) ->
         'risk': risk_df,
         'claims': claims_df,
         'transactions': transactions_df,
+        'policies': policy_df,
+        'claims_aggregations': claims_agg_df,
+        'lab_results': lab_df,
+        'providers': provider_df,
     }
 
 
@@ -914,6 +1267,14 @@ Examples:
             num_transactions = min(args.num_customers * 10, 100000)
         transactions_df = generator.generate_transactions(customer_ids, num_transactions, end_date)
         
+        # Generate additional tables
+        policy_df = generator.generate_policy_details(customer_ids, end_date)
+        claims_agg_df = generator.generate_claims_aggregations(customer_ids, claims_df, end_date)
+        lab_df = generator.generate_lab_results(customer_ids, end_date)
+        
+        num_providers = max(1000, args.num_customers // 10)
+        provider_df = generator.generate_provider_network(num_providers, end_date)
+        
         # Load data
         datasets = [
             ("insurance.customer_profiles", profiles_df),
@@ -921,6 +1282,10 @@ Examples:
             ("insurance.customer_risk_metrics", risk_df),
             ("insurance.claims_history", claims_df),
             ("insurance.transactions", transactions_df),
+            ("insurance.policy_details", policy_df),
+            ("insurance.claims_aggregations", claims_agg_df),
+            ("insurance.lab_results", lab_df),
+            ("insurance.provider_network", provider_df),
         ]
         
         for table_name, df in datasets:
