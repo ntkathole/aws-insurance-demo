@@ -8,7 +8,7 @@ Entities represent the primary keys used to fetch features. In insurance domain:
 - provider: Healthcare/service provider (for claims processing)
 """
 
-from feast import Entity
+from feast import Entity, ValueType
 
 # =============================================================================
 # CUSTOMER ENTITY
@@ -17,6 +17,7 @@ from feast import Entity
 customer = Entity(
     name="customer",
     join_keys=["customer_id"],
+    value_type=ValueType.STRING,
     description="Insurance customer or policy applicant",
     tags={
         "domain": "underwriting",
@@ -31,6 +32,7 @@ customer = Entity(
 policy = Entity(
     name="policy",
     join_keys=["policy_id"],
+    value_type=ValueType.STRING,
     description="Insurance policy",
     tags={
         "domain": "underwriting",
@@ -44,6 +46,7 @@ policy = Entity(
 claim = Entity(
     name="claim",
     join_keys=["claim_id"],
+    value_type=ValueType.STRING,
     description="Insurance claim",
     tags={
         "domain": "claims",
@@ -57,6 +60,7 @@ claim = Entity(
 provider = Entity(
     name="provider",
     join_keys=["provider_id"],
+    value_type=ValueType.STRING,
     description="Healthcare or service provider",
     tags={
         "domain": "claims",
@@ -70,6 +74,7 @@ provider = Entity(
 transaction = Entity(
     name="transaction",
     join_keys=["transaction_id"],
+    value_type=ValueType.STRING,
     description="Financial transaction for fraud detection",
     tags={
         "domain": "streaming",

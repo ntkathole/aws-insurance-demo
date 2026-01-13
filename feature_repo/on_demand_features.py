@@ -415,7 +415,7 @@ def fraud_detection_score(inputs: pd.DataFrame) -> pd.DataFrame:
         Field(name="fast_track_eligible", dtype=Bool),
         Field(name="siu_referral_recommended", dtype=Bool),
         Field(name="priority_level", dtype=String),
-        Field(name="estimated_processing_days", dtype=Int32),
+        Field(name="estimated_processing_days", dtype=Int64),
     ],
     mode="pandas",
     description="Claims assessment and fraud indicator calculation",
