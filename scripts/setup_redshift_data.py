@@ -1,41 +1,37 @@
 #!/usr/bin/env python
 """
-Redshift Data Setup Script for AWS Insurance Demo
+AWS Insurance Demo - Data Setup Script
 
-This single script does everything needed to set up Redshift for the demo:
-1. Creates the insurance schema and all required tables
+This single script handles all data setup needs for the demo:
+1. Creates the insurance schema and all required tables in Redshift
 2. Generates realistic sample data
-3. Loads the data directly into Redshift
+3. Loads data directly into Redshift (no local file generation needed)
+
+Modes:
+- Redshift mode (default): Generates and loads data directly to Redshift
+- Local mode (--local-only): Generates parquet files locally for testing without AWS
 
 Usage:
-    # Using environment variables (recommended)
+    # MODE 1: Load directly to Redshift (recommended for demo)
     export REDSHIFT_HOST=my-cluster.xxxxx.us-west-2.redshift.amazonaws.com
     export REDSHIFT_DATABASE=insurance_features
     export REDSHIFT_USER=feast_user
     export REDSHIFT_PASSWORD=your_password
     python setup_redshift_data.py --num-customers 10000
 
-    # Using command line arguments
-    python setup_redshift_data.py \
-        --host my-cluster.xxxxx.us-west-2.redshift.amazonaws.com \
-        --database insurance_features \
-        --user feast_user \
-        --password your_password \
-        --num-customers 10000
+    # MODE 2: Local testing only (no Redshift required)
+    python setup_redshift_data.py --local-only --output-dir ../data/sample --num-customers 1000
 
-    # For faster loading with large datasets, use S3:
+    # MODE 3: For faster Redshift loading with large datasets, use S3:
     python setup_redshift_data.py \
         --host my-cluster.xxxxx.us-west-2.redshift.amazonaws.com \
-        --database insurance_features \
-        --user feast_user \
-        --password your_password \
         --num-customers 100000 \
         --use-s3 \
         --s3-bucket my-feast-bucket \
         --iam-role arn:aws:iam::123456789012:role/RedshiftS3Role
 
 Requirements:
-    pip install redshift-connector pandas numpy boto3
+    pip install redshift-connector pandas numpy boto3 pyarrow
 """
 
 import argparse
@@ -602,20 +598,88 @@ def verify_data(conn) -> None:
     cursor.close()
 
 
+def generate_local_files(num_customers: int, output_dir: str, seed: int = 42) -> dict:
+    """Generate sample data and save to local parquet files for testing."""
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    
+    print("\n" + "=" * 60)
+    print("LOCAL MODE: Generating sample data files")
+    print("=" * 60)
+    
+    generator = InsuranceDataGenerator(seed=seed)
+    end_date = datetime.now()
+    
+    # Generate customer profiles
+    profiles_df = generator.generate_customer_profiles(num_customers, end_date)
+    customer_ids = profiles_df['customer_id'].tolist()
+    
+    # Generate related data
+    credit_df = generator.generate_customer_credit(customer_ids, end_date)
+    risk_df = generator.generate_customer_risk(customer_ids, credit_df, end_date)
+    
+    num_claims = int(num_customers * 0.5)
+    claims_df = generator.generate_claims_history(customer_ids, num_claims, end_date)
+    
+    num_transactions = num_customers * 50
+    transactions_df = generator.generate_transactions(customer_ids, num_transactions, end_date)
+    
+    # Save to parquet files
+    datasets = {
+        'profiles': ('customer_profiles.parquet', profiles_df),
+        'credit': ('customer_credit.parquet', credit_df),
+        'risk': ('customer_risk.parquet', risk_df),
+        'claims': ('claims_history.parquet', claims_df),
+        'transactions': ('transactions.parquet', transactions_df),
+    }
+    
+    print("\n  Saving files...")
+    for name, (filename, df) in datasets.items():
+        filepath = os.path.join(output_dir, filename)
+        df.to_parquet(filepath, index=False)
+        print(f"    {filename}: {len(df):,} rows")
+    
+    print("\n" + "=" * 60)
+    print("✓ LOCAL DATA GENERATION COMPLETE!")
+    print("=" * 60)
+    print(f"\nOutput directory: {output_dir}")
+    print(f"Customer profiles: {len(profiles_df):,} records")
+    print(f"Customer credit: {len(credit_df):,} records")
+    print(f"Customer risk: {len(risk_df):,} records")
+    print(f"Claims history: {len(claims_df):,} records")
+    print(f"Transactions: {len(transactions_df):,} records")
+    print("\nNext steps for local testing:")
+    print("  1. Update feature_store.yaml to use file sources")
+    print("  2. Run: cd ../feature_repo && feast apply")
+    print("  3. Run: feast materialize-incremental $(date +%Y-%m-%dT%H:%M:%S)")
+    print("=" * 60)
+    
+    return {
+        'profiles': profiles_df,
+        'credit': credit_df,
+        'risk': risk_df,
+        'claims': claims_df,
+        'transactions': transactions_df,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Set up Redshift with sample data for AWS Insurance Demo",
+        description="Set up data for AWS Insurance Demo (Redshift or local files)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic usage with environment variables
+  # MODE 1: Local testing only (no AWS required)
+  python setup_redshift_data.py --local-only --output-dir ../data/sample --num-customers 1000
+
+  # MODE 2: Load to Redshift with environment variables
   export REDSHIFT_HOST=my-cluster.xxxxx.us-west-2.redshift.amazonaws.com
   export REDSHIFT_DATABASE=insurance_features
   export REDSHIFT_USER=feast_user
   export REDSHIFT_PASSWORD=mypassword
   python setup_redshift_data.py --num-customers 10000
 
-  # With command line arguments
+  # MODE 3: Load to Redshift with command line arguments
   python setup_redshift_data.py \\
       --host my-cluster.xxxxx.us-west-2.redshift.amazonaws.com \\
       --database insurance_features \\
@@ -623,18 +687,20 @@ Examples:
       --password mypassword \\
       --num-customers 10000
 
-  # For large datasets, use S3 COPY (faster)
+  # MODE 4: For large datasets, use S3 COPY (faster)
   python setup_redshift_data.py \\
-      --host my-cluster.xxxxx.us-west-2.redshift.amazonaws.com \\
-      --database insurance_features \\
-      --user feast_user \\
-      --password mypassword \\
       --num-customers 100000 \\
       --use-s3 \\
       --s3-bucket my-feast-bucket \\
       --iam-role arn:aws:iam::123456789012:role/RedshiftS3Role
         """
     )
+    
+    # Local mode arguments
+    parser.add_argument("--local-only", action="store_true",
+                       help="Generate local parquet files only (no Redshift required)")
+    parser.add_argument("--output-dir", default="../data/sample",
+                       help="Output directory for local parquet files (with --local-only)")
     
     # Connection arguments
     parser.add_argument("--host", default=os.environ.get("REDSHIFT_HOST"),
@@ -667,13 +733,18 @@ Examples:
     
     args = parser.parse_args()
     
-    # Validate required arguments
+    # Handle local-only mode
+    if args.local_only:
+        generate_local_files(args.num_customers, args.output_dir, args.seed)
+        return
+    
+    # Validate required arguments for Redshift mode
     if not args.host:
-        parser.error("--host is required (or set REDSHIFT_HOST env var)")
+        parser.error("--host is required (or set REDSHIFT_HOST env var). Use --local-only for local testing.")
     if not args.user:
-        parser.error("--user is required (or set REDSHIFT_USER env var)")
+        parser.error("--user is required (or set REDSHIFT_USER env var). Use --local-only for local testing.")
     if not args.password:
-        parser.error("--password is required (or set REDSHIFT_PASSWORD env var)")
+        parser.error("--password is required (or set REDSHIFT_PASSWORD env var). Use --local-only for local testing.")
     
     if args.use_s3:
         if not args.s3_bucket:

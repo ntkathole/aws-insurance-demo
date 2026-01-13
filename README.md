@@ -75,9 +75,9 @@ aws-insurance-demo/
 │   ├── on_demand_features.py       # On-demand transformations
 │   └── feature_services.py         # Feature services
 ├── scripts/
-│   ├── generate_sample_data.py     # Generate sample data for testing
+│   ├── setup_redshift_data.py      # Single script: generate & load data (Redshift or local)
 │   ├── benchmark_online_server.py  # Latency testing script
-│   └── setup_redshift_tables.sql   # SQL to create Redshift tables
+│   └── setup_redshift_tables.sql   # SQL to create Redshift tables (reference)
 ├── notebooks/
 │   ├── 01_setup_and_data_prep.ipynb
 │   ├── 02_feature_engineering.ipynb
@@ -140,17 +140,20 @@ online_store:
   region: us-west-2
 ```
 
-#### Step 2: Set up Redshift data (single command!)
+#### Step 2: Set up data
 
-The `setup_redshift_data.py` script does everything in one step:
-- Creates the insurance schema and all tables
+The `setup_redshift_data.py` script handles all data setup in one command:
+- Creates the insurance schema and all tables (Redshift mode)
 - Generates realistic sample data
-- Loads data directly into Redshift
+- Loads data directly into Redshift OR generates local files for testing
 
 ```bash
 cd scripts
 
-# Option A: Using environment variables (recommended)
+# OPTION A: Local testing (no AWS required)
+python setup_redshift_data.py --local-only --output-dir ../data/sample --num-customers 1000
+
+# OPTION B: Redshift with environment variables
 export REDSHIFT_HOST=YOUR-CLUSTER.xxxxx.us-west-2.redshift.amazonaws.com
 export REDSHIFT_DATABASE=insurance_features
 export REDSHIFT_USER=feast_user
@@ -158,7 +161,7 @@ export REDSHIFT_PASSWORD=YOUR-PASSWORD
 
 python setup_redshift_data.py --num-customers 10000
 
-# Option B: Using command line arguments
+# OPTION C: Redshift with command line arguments
 python setup_redshift_data.py \
     --host YOUR-CLUSTER.xxxxx.us-west-2.redshift.amazonaws.com \
     --database insurance_features \
@@ -166,12 +169,8 @@ python setup_redshift_data.py \
     --password YOUR-PASSWORD \
     --num-customers 10000
 
-# Option C: For large datasets (100K+ customers), use S3 COPY for faster loading
+# OPTION D: For large datasets (100K+ customers), use S3 COPY for faster loading
 python setup_redshift_data.py \
-    --host YOUR-CLUSTER.xxxxx.us-west-2.redshift.amazonaws.com \
-    --database insurance_features \
-    --user feast_user \
-    --password YOUR-PASSWORD \
     --num-customers 100000 \
     --use-s3 \
     --s3-bucket YOUR-BUCKET \
