@@ -25,9 +25,12 @@ from data_sources import (
     KAFKA_AVAILABLE,
 )
 
-# StreamFeatureView requires Kafka and specific Feast configuration
-# Disabled for this demo - enable when Kafka is configured
-STREAM_FV_AVAILABLE = False
+# Try to import StreamFeatureView - requires proper Feast installation
+try:
+    from feast import StreamFeatureView, stream_feature_view
+    STREAM_FV_AVAILABLE = True
+except ImportError:
+    STREAM_FV_AVAILABLE = False
 
 
 # =============================================================================
@@ -86,57 +89,17 @@ transaction_features_fv = FeatureView(
 
 
 # =============================================================================
-# CUSTOMER TRANSACTION AGGREGATION FEATURES
+# CUSTOMER TRANSACTION AGGREGATION FEATURES (DISABLED)
 # =============================================================================
-# Customer-level transaction aggregations for fraud detection
-customer_transaction_agg_fv = FeatureView(
-    name="customer_transaction_aggregations",
-    entities=[customer],
-    ttl=timedelta(hours=1),
-    schema=[
-        # Transaction counts - time windows
-        Field(name="txn_count_1h", dtype=Int32, description="Transactions in last hour"),
-        Field(name="txn_count_24h", dtype=Int32, description="Transactions in last 24 hours"),
-        Field(name="txn_count_7d", dtype=Int32, description="Transactions in last 7 days"),
-        Field(name="txn_count_30d", dtype=Int32, description="Transactions in last 30 days"),
-        
-        # Transaction amounts - time windows
-        Field(name="txn_amount_sum_1h", dtype=Float64, description="Total amount in last hour"),
-        Field(name="txn_amount_sum_24h", dtype=Float64, description="Total amount in last 24 hours"),
-        Field(name="txn_amount_sum_7d", dtype=Float64, description="Total amount in last 7 days"),
-        Field(name="txn_amount_avg_30d", dtype=Float64, description="Avg transaction amount 30 days"),
-        Field(name="txn_amount_max_30d", dtype=Float64, description="Max transaction amount 30 days"),
-        Field(name="txn_amount_std_30d", dtype=Float64, description="Std dev transaction amount 30 days"),
-        
-        # Unique merchants
-        Field(name="unique_merchants_24h", dtype=Int32, description="Unique merchants in 24h"),
-        Field(name="unique_merchants_7d", dtype=Int32, description="Unique merchants in 7 days"),
-        Field(name="unique_categories_7d", dtype=Int32, description="Unique categories in 7 days"),
-        
-        # Geographic spread
-        Field(name="unique_countries_7d", dtype=Int32, description="Unique countries in 7 days"),
-        Field(name="unique_cities_7d", dtype=Int32, description="Unique cities in 7 days"),
-        Field(name="max_distance_7d", dtype=Float32, description="Max distance between txns in 7 days"),
-        
-        # Decline indicators
-        Field(name="decline_count_24h", dtype=Int32, description="Declined transactions in 24h"),
-        Field(name="decline_rate_7d", dtype=Float32, description="Decline rate in 7 days"),
-        
-        # Anomaly scores
-        Field(name="velocity_anomaly_score", dtype=Float32, description="Velocity anomaly score"),
-        Field(name="amount_anomaly_score", dtype=Float32, description="Amount anomaly score"),
-        Field(name="location_anomaly_score", dtype=Float32, description="Location anomaly score"),
-        Field(name="overall_anomaly_score", dtype=Float32, description="Overall anomaly score"),
-    ],
-    online=True,
-    source=transaction_source,
-    tags={
-        "domain": "streaming",
-        "use_case": "fraud_detection",
-        "aggregation": "true",
-    },
-    description="Customer-level transaction aggregations for fraud detection",
-)
+# NOTE: This feature view is disabled because it requires pre-computed 
+# aggregation columns that need a streaming pipeline or batch job to populate.
+# Enable when you have a separate customer_transaction_aggregations table.
+#
+# customer_transaction_agg_fv = FeatureView(
+#     name="customer_transaction_aggregations",
+#     entities=[customer],
+#     ...
+# )
 
 
 # =============================================================================
