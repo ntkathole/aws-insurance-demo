@@ -52,6 +52,14 @@ from on_demand_features import (
     claims_fraud_indicators,
 )
 
+# Import optimized on-demand feature views (native Python versions)
+from on_demand_features_optimized import (
+    underwriting_risk_score_optimized,
+    premium_calculator_optimized,
+    fraud_detection_score_optimized,
+    claims_fraud_indicators_optimized,
+)
+
 
 # =============================================================================
 # UNDERWRITING FEATURE SERVICES (Real-Time PCM)
@@ -398,4 +406,401 @@ benchmark_with_odfv = FeatureService(
         "expected_features": "50+",
     },
     description="Large feature set with on-demand transformations for benchmarking",
+)
+
+# =============================================================================
+# ENHANCED BENCHMARK SERVICES - For Multi-Dimensional Performance Testing
+# =============================================================================
+
+# Single FV feature count scaling tests
+benchmark_profile_3 = FeatureService(
+    name="benchmark_profile_3",
+    features=[
+        customer_profile_fv[[
+            "age",
+            "gender",
+            "state",
+        ]],
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "feature_count",
+        "size": "3_features",
+        "fvs": "1",
+        "expected_features": "3",
+    },
+    description="3 features from customer profile for feature count scaling",
+)
+
+benchmark_profile_6 = FeatureService(
+    name="benchmark_profile_6",
+    features=[
+        customer_profile_fv[[
+            "age",
+            "gender",
+            "state",
+            "marital_status",
+            "occupation",
+            "education_level",
+        ]],
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "feature_count",
+        "size": "6_features",
+        "fvs": "1",
+        "expected_features": "6",
+    },
+    description="6 features from customer profile for feature count scaling",
+)
+
+benchmark_profile_all = FeatureService(
+    name="benchmark_profile_all",
+    features=[
+        customer_profile_fv,  # All 13 features
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "feature_count",
+        "size": "13_features",
+        "fvs": "1",
+        "expected_features": "13",
+    },
+    description="All customer profile features for feature count scaling",
+)
+
+# Multi-FV scaling tests
+benchmark_2fv = FeatureService(
+    name="benchmark_2fv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "feature_view",
+        "size": "24_features",
+        "fvs": "2",
+        "expected_features": "24",
+    },
+    description="2 feature views for FV scaling tests",
+)
+
+benchmark_3fv = FeatureService(
+    name="benchmark_3fv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fv,
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "feature_view",
+        "size": "40_features",
+        "fvs": "3",
+        "expected_features": "40",
+    },
+    description="3 feature views for FV scaling tests",
+)
+
+benchmark_4fv = FeatureService(
+    name="benchmark_4fv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fv,
+        policy_fv,
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "feature_view",
+        "size": "65_features",
+        "fvs": "4",
+        "expected_features": "65",
+    },
+    description="4 feature views for FV scaling tests",
+)
+
+# ODFV isolation tests
+benchmark_no_odfv = FeatureService(
+    name="benchmark_no_odfv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fv,
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "odfv_count",
+        "odfvs": "0",
+        "baseline": "true",
+        "expected_features": "40",
+    },
+    description="Baseline service with no ODFVs for ODFV overhead measurement",
+)
+
+benchmark_1_light_odfv = FeatureService(
+    name="benchmark_1_light_odfv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        premium_calculator,  # Lightweight ODFV
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "odfv_count",
+        "odfvs": "1",
+        "complexity": "light",
+        "expected_features": "32",
+    },
+    description="Service with 1 lightweight ODFV (premium_calculator)",
+)
+
+benchmark_1_heavy_odfv = FeatureService(
+    name="benchmark_1_heavy_odfv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fv,
+        underwriting_risk_score,  # Heavy ODFV with row iteration
+    ],
+    tags={
+        "use_case": "benchmark",
+        "dimension": "odfv_count",
+        "odfvs": "1",
+        "complexity": "heavy",
+        "expected_features": "50",
+    },
+    description="Service with 1 heavy ODFV (underwriting_risk_score)",
+)
+
+
+# =============================================================================
+# OPTIMIZED FEATURE SERVICES - Native Python ODFV Performance Comparison
+# =============================================================================
+
+# Optimized Underwriting V1 - Native Python ODFV
+underwriting_v1_optimized = FeatureService(
+    name="underwriting_v1_optimized",
+    features=[
+        # Same base features as v1
+        customer_profile_fv[[
+            "age",
+            "gender",
+            "state",
+            "region_risk_zone",
+            "customer_tenure_months",
+            "num_policies",
+        ]],
+        customer_credit_fv[[
+            "credit_score",
+            "credit_score_tier",
+            "insurance_score",
+            "bankruptcy_flag",
+        ]],
+        customer_risk_fv[[
+            "overall_risk_score",
+            "claims_risk_score",
+            "num_claims_3y",
+            "risk_segment",
+        ]],
+        # OPTIMIZED: Native Python ODFV
+        underwriting_risk_score_optimized,
+    ],
+    tags={
+        "version": "1.0_optimized",
+        "use_case": "pcm",
+        "latency_sla_ms": "35",  # Expected 15-25ms improvement
+        "owner": "underwriting-team",
+        "optimization": "native_python",
+    },
+    description="OPTIMIZED: Basic underwriting with native Python ODFV for performance comparison",
+)
+
+# Optimized Underwriting V2 - Native Python ODFVs
+underwriting_v2_optimized = FeatureService(
+    name="underwriting_v2_optimized",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fresh_fv,
+        policy_fv,
+        # OPTIMIZED: Both ODFVs use native Python
+        underwriting_risk_score_optimized,
+        premium_calculator_optimized,
+    ],
+    tags={
+        "version": "2.0_optimized",
+        "use_case": "pcm",
+        "latency_sla_ms": "75",  # Expected 30-50ms improvement
+        "owner": "underwriting-team",
+        "model": "underwriting_model_v2",
+        "optimization": "native_python",
+    },
+    description="OPTIMIZED: Comprehensive underwriting with native Python ODFVs",
+)
+
+# Optimized Quick Quote - Native Python ODFV
+underwriting_quick_quote_optimized = FeatureService(
+    name="underwriting_quick_quote_optimized",
+    features=[
+        customer_profile_fv[[
+            "age",
+            "state",
+            "region_risk_zone",
+        ]],
+        customer_credit_fv[[
+            "credit_score_tier",
+            "insurance_score",
+        ]],
+        customer_risk_fv[[
+            "overall_risk_score",
+            "risk_segment",
+        ]],
+        # OPTIMIZED: Native Python premium calculator
+        premium_calculator_optimized,
+    ],
+    tags={
+        "version": "1.0_optimized",
+        "use_case": "pcm",
+        "latency_sla_ms": "10",  # Expected significant improvement for quick quotes
+        "owner": "underwriting-team",
+        "tier": "quick",
+        "optimization": "native_python",
+    },
+    description="OPTIMIZED: Quick quote with native Python ODFV for minimal latency",
+)
+
+# Optimized Claims Assessment - Native Python ODFV
+claims_assessment_v1_optimized = FeatureService(
+    name="claims_assessment_v1_optimized",
+    features=[
+        claims_history_fv,
+        claims_aggregation_fv,
+        provider_fv,
+        # OPTIMIZED: Native Python claims fraud indicators
+        claims_fraud_indicators_optimized,
+    ],
+    tags={
+        "version": "1.0_optimized",
+        "use_case": "claims",
+        "batch": "true",
+        "owner": "claims-team",
+        "optimization": "native_python",
+    },
+    description="OPTIMIZED: Claims assessment with native Python ODFV",
+)
+
+# Optimized Fraud Detection - Native Python ODFV
+fraud_detection_v1_optimized = FeatureService(
+    name="fraud_detection_v1_optimized",
+    features=[
+        transaction_features_fv,
+        # OPTIMIZED: Native Python fraud detection
+        fraud_detection_score_optimized,
+    ],
+    tags={
+        "version": "1.0_optimized",
+        "use_case": "dss",
+        "real_time": "true",
+        "latency_sla_ms": "35",  # Expected 15ms improvement
+        "owner": "fraud-team",
+        "optimization": "native_python",
+    },
+    description="OPTIMIZED: Real-time fraud detection with native Python ODFV",
+)
+
+# =============================================================================
+# OPTIMIZED BENCHMARK SERVICES - For Performance Comparison Testing
+# =============================================================================
+
+# Pure FV baseline (unchanged - for comparison)
+benchmark_pure_fv_baseline = FeatureService(
+    name="benchmark_pure_fv_baseline",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fv,
+    ],
+    tags={
+        "use_case": "benchmark",
+        "type": "pure_fv",
+        "optimization": "baseline",
+        "expected_features": "40",
+    },
+    description="BASELINE: Pure FV service for ODFV performance comparison",
+)
+
+# Pandas ODFV version (for comparison)
+benchmark_pandas_light_odfv = FeatureService(
+    name="benchmark_pandas_light_odfv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        premium_calculator,  # Pandas version
+    ],
+    tags={
+        "use_case": "benchmark",
+        "type": "odfv_pandas",
+        "complexity": "light",
+        "optimization": "pandas",
+        "expected_features": "32",
+    },
+    description="PANDAS: Light ODFV with pandas operations for comparison",
+)
+
+# Optimized light ODFV (native Python)
+benchmark_optimized_light_odfv = FeatureService(
+    name="benchmark_optimized_light_odfv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        premium_calculator_optimized,  # Native Python version
+    ],
+    tags={
+        "use_case": "benchmark",
+        "type": "odfv_optimized",
+        "complexity": "light",
+        "optimization": "native_python",
+        "expected_features": "32",
+    },
+    description="OPTIMIZED: Light ODFV with native Python for performance comparison",
+)
+
+# Pandas heavy ODFV version (for comparison)
+benchmark_pandas_heavy_odfv = FeatureService(
+    name="benchmark_pandas_heavy_odfv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fv,
+        underwriting_risk_score,  # Pandas version with row iteration
+    ],
+    tags={
+        "use_case": "benchmark",
+        "type": "odfv_pandas",
+        "complexity": "heavy",
+        "optimization": "pandas",
+        "expected_features": "50",
+    },
+    description="PANDAS: Heavy ODFV with pandas operations for comparison",
+)
+
+# Optimized heavy ODFV (native Python)
+benchmark_optimized_heavy_odfv = FeatureService(
+    name="benchmark_optimized_heavy_odfv",
+    features=[
+        customer_profile_fv,
+        customer_credit_fv,
+        customer_risk_fv,
+        underwriting_risk_score_optimized,  # Native Python version
+    ],
+    tags={
+        "use_case": "benchmark",
+        "type": "odfv_optimized",
+        "complexity": "heavy",
+        "optimization": "native_python",
+        "expected_features": "50",
+    },
+    description="OPTIMIZED: Heavy ODFV with native Python for performance comparison",
 )
