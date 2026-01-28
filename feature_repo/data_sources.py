@@ -133,6 +133,72 @@ transaction_source = RedshiftSource(
     tags={"domain": "streaming", "refresh": "real-time"},
 )
 
+# Consolidated customer source (Profile + Credit + Risk)
+customer_consolidated_source = RedshiftSource(
+    name="customer_consolidated_source",
+    query="""
+    SELECT
+        cp.customer_id,
+        cp.event_timestamp,
+        cp.created_at as created_timestamp,
+
+        -- Profile features (13)
+        cp.age,
+        cp.gender,
+        cp.marital_status,
+        cp.occupation,
+        cp.education_level,
+        cp.state,
+        cp.zip_code,
+        cp.urban_rural,
+        cp.region_risk_zone,
+        cp.customer_tenure_months,
+        cp.num_policies,
+        cp.loyalty_tier,
+        cp.has_agent,
+
+        -- Credit features (11)
+        cc.credit_score,
+        cc.credit_score_tier,
+        cc.credit_score_change_3m,
+        cc.credit_history_length_months,
+        cc.num_credit_accounts,
+        cc.num_delinquencies,
+        cc.bankruptcy_flag,
+        cc.annual_income,
+        cc.debt_to_income_ratio,
+        cc.payment_history_score,
+        cc.insurance_score,
+        cc.prior_coverage_lapse,
+
+        -- Risk features (16)
+        cr.overall_risk_score,
+        cr.claims_risk_score,
+        cr.fraud_risk_score,
+        cr.churn_risk_score,
+        cr.num_claims_1y,
+        cr.num_claims_3y,
+        cr.total_claims_amount_1y,
+        cr.avg_claim_amount,
+        cr.policy_changes_1y,
+        cr.late_payments_1y,
+        cr.inquiry_count_30d,
+        cr.driving_violations_3y,
+        cr.at_fault_accidents_3y,
+        cr.dui_flag,
+        cr.risk_segment,
+        cr.underwriting_tier
+
+    FROM insurance.customer_profiles cp
+    JOIN insurance.customer_credit_data cc ON cp.customer_id = cc.customer_id
+    JOIN insurance.customer_risk_metrics cr ON cp.customer_id = cr.customer_id
+    """,
+    timestamp_field="event_timestamp",
+    created_timestamp_column="created_timestamp",
+    description="Consolidated customer features (profile + credit + risk)",
+    tags={"domain": "customer", "consolidated": "true", "refresh": "hourly"},
+)
+
 
 
 # =============================================================================
