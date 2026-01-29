@@ -15,7 +15,7 @@ from feast import FeatureService
 
 # Import simplified feature components
 from feature_views.customer_features import customer_consolidated_fv, FEATURE_GROUPS
-from on_demand_features_simplified import premium_calculator_optimized
+from on_demand_features import premium_calculator_optimized
 
 
 # =============================================================================
